@@ -9,15 +9,12 @@ import android.view.ViewGroup;
 import android.widget.ListView;
 import android.widget.OverScroller;
 
-import java.lang.reflect.Field;
-
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.view.NestedScrollingParent3;
 import androidx.core.view.NestedScrollingParentHelper;
 import androidx.core.view.ViewCompat;
 import androidx.core.widget.ListViewCompat;
-import androidx.recyclerview.widget.RecyclerView;
 
 public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
 {
@@ -26,14 +23,17 @@ public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
     private final OverScroller mScroller;
     private final int mTouchSlop;
     private final int mHeadViewHeight;
+    // 中等动画持续时间
+    private final int mMediumAnimationDuration;
 
     private View mHeaderView;
     private View mTarget;
-
     // 执行 fling 回弹动画的 runnable
     private FlingRunnable mFlingRunnable;
-    // 已经滚动的距离
-    private int mScrollY = 0;
+    // 执行下拉回弹动画的 runnable
+    private ReboundRunnable mReboundRunnable;
+    // mTarget 已经滚动的距离
+    private int mTargetScrollY = 0;
     // 是否是向下滚动
     private boolean isUp = false;
     // 是否正在拖动
@@ -42,8 +42,6 @@ public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
     private float mInitialMotionY;
     // 下拉阻尼系数
     private static final float DAMPING_COEFFICIENT = 0.025f;
-
-    private static final String TAG = "MyRefreshLayout";
 
     public MyRefreshLayout(@NonNull Context context)
     {
@@ -60,6 +58,7 @@ public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
         setOverScrollMode(OVER_SCROLL_NEVER);
         mScroller = new OverScroller(mContext);
         mParentHelper = new NestedScrollingParentHelper(this);
+        mMediumAnimationDuration = getResources().getInteger(android.R.integer.config_mediumAnimTime);
     }
 
     @Override
@@ -83,6 +82,10 @@ public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
                 if (mFlingRunnable != null)
                 {
                     cancelFlingAnimation();
+                }
+                if (mReboundRunnable != null)
+                {
+                    cancelReboundAnimation();
                 }
                 scrollBy(0, mHeaderView.getHeight() + mHeaderView.getTop());
                 mIsBeingDragged = false;
@@ -165,7 +168,7 @@ public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
                 if (mIsBeingDragged)
                 {
                     final float dy = (y - mInitialMotionY) * DAMPING_COEFFICIENT;
-                    if (Math.abs(getScrollY()) <= mHeadViewHeight + 100)
+                    if (Math.abs(getScrollY()) <= mHeadViewHeight + 200)
                     {
                         if (Math.abs(dy) > 0)
                         {
@@ -185,14 +188,16 @@ public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
                     mIsBeingDragged = false;
                     if (Math.abs(getScrollY()) > mHeaderView.getHeight())
                     {
-                        // todo 可以添加回弹动画
-                        scrollBy(0, Math.abs(getScrollY()) - mHeaderView.getHeight());
+                        mScroller.startScroll(0, getScrollY(), 0,
+                                Math.abs(getScrollY()) - mHeaderView.getHeight(), mMediumAnimationDuration);
                     }
                     else
                     {
-                        // todo 可以添加回弹动画
-                        scrollBy(0, Math.abs(getScrollY()));
+                        mScroller.startScroll(0, getScrollY(), 0,
+                                Math.abs(getScrollY()), mMediumAnimationDuration);
                     }
+                    mReboundRunnable = new ReboundRunnable();
+                    postOnAnimation(mReboundRunnable);
                 }
                 return false;
             case MotionEvent.ACTION_CANCEL:
@@ -215,10 +220,10 @@ public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
     {
         if (mHeaderView != null && isUp)
         {
-            mScroller.fling(0, mScrollY,
+            mScroller.fling(0, mTargetScrollY,
                     0, velocityY,
                     0, 0,
-                    0, mTarget.getHeight(),
+                    0, Integer.MAX_VALUE,
                     0, mHeaderView.getHeight());
             // 执行新的 fling 回弹动画
             mFlingRunnable = new FlingRunnable();
@@ -226,10 +231,21 @@ public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
         }
     }
 
+    private void dispatchReboundAnimation()
+    {
+
+    }
+
     private void cancelFlingAnimation()
     {
         removeCallbacks(mFlingRunnable);
         mFlingRunnable = null;
+    }
+
+    private void cancelReboundAnimation()
+    {
+        removeCallbacks(mReboundRunnable);
+        mReboundRunnable = null;
     }
 
     private void isDragging(float y)
@@ -249,31 +265,6 @@ public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
             return ListViewCompat.canScrollList((ListView) mTarget, -1);
         }
         return mTarget.canScrollVertically(-1);
-    }
-
-    private void targetScrollCompat(int dy)
-    {
-        if (mTarget instanceof RecyclerView)
-        {
-            RecyclerView target = ((RecyclerView)mTarget);
-            RecyclerView.Recycler mRecycler = null;
-            RecyclerView.State mState = null;
-            try
-            {
-                Field field1 = target.getClass().getDeclaredField("mRecycler");
-                field1.setAccessible(true);
-                mRecycler = (RecyclerView.Recycler) field1.get(target);
-
-                Field field2 = target.getClass().getDeclaredField("mState");
-                field2.setAccessible(true);
-                mState = (RecyclerView.State) field2.get(target);
-            }
-            catch (Exception e)
-            {
-                e.printStackTrace();
-            }
-            target.getLayoutManager().scrollVerticallyBy(dy, mRecycler, mState);
-        }
     }
 
     private void ensureTarget()
@@ -330,7 +321,7 @@ public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
         // todo mScrollY的计算还存在问题，需要修改
         if ((dy < 0 && mTarget.canScrollVertically(-1)) || (dy > 0 && mTarget.canScrollVertically(1)))
         {
-            mScrollY += dy;
+            mTargetScrollY += dy;
         }
         if (dy > 0 && mFlingRunnable == null && getScrollY() < 0)
         {
@@ -361,15 +352,32 @@ public class MyRefreshLayout extends ViewGroup implements NestedScrollingParent3
         {
             if (mScroller.computeScrollOffset())
             {
-                // todo 这个会导致所有视图的移动，目前未找到好的解决方法
-                //  效果应该是如果 mTarget 能向上滑动让 mTarget 先滑动；
-                //  等到 mTarget 不能滑动了，再让视图整体移动，实现 fling 的回弹动画效果
-                scrollTo(0, mScroller.getCurrY());
+                if (!canTargetScrollUp())
+                {
+                    scrollTo(0, mScroller.getCurrY());
+                }
                 postOnAnimation(this);
             }
             else
             {
                 mFlingRunnable = null;
+            }
+        }
+    }
+
+    class ReboundRunnable implements Runnable
+    {
+        @Override
+        public void run()
+        {
+            if (mScroller.computeScrollOffset())
+            {
+                scrollTo(0, mScroller.getCurrY());
+                postOnAnimation(this);
+            }
+            else
+            {
+                mReboundRunnable = null;
             }
         }
     }
