@@ -17,7 +17,7 @@
         app:layout_constraintTop_toTopOf="parent" />
     
     <com.chenjimou.recyclerviewpullrefreshdemo.MyRefreshLayout
-        android:id="@+id/myNestedScrollView"
+        android:id="@+id/myRefreshLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
     

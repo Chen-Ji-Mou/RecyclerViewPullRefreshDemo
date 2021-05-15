@@ -18,7 +18,7 @@ import com.chenjimou.recyclerviewpullrefreshdemo.databinding.ActivityMainBinding
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity
+public class MainActivity extends AppCompatActivity implements MyRefreshLayout.OnRefreshListener
 {
     private ActivityMainBinding mBinding;
     private final List<String> list = new ArrayList<>();
@@ -49,6 +49,22 @@ public class MainActivity extends AppCompatActivity
         mBinding.recyclerView.setLayoutManager(new LinearLayoutManager(this));
         mBinding.recyclerView.addItemDecoration(new DividerItemDecoration(this, LinearLayout.VERTICAL));
         mBinding.recyclerView.setAdapter(new MyAdapter());
+
+        mBinding.myRefreshLayout.setOnRefreshListener(this);
+    }
+
+    @Override
+    public void onRefresh()
+    {
+        try
+        {
+            Thread.sleep(2000);
+            mBinding.myRefreshLayout.finishRefresh();
+        }
+        catch (InterruptedException e)
+        {
+            e.printStackTrace();
+        }
     }
 
     class MyAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
