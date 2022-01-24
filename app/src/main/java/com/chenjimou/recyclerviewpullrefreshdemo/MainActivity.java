@@ -20,6 +20,7 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements MyRefreshLayout.OnRefreshListener
 {
+    //太强了，男神demo
     private ActivityMainBinding mBinding;
     private final List<String> list = new ArrayList<>();
 
