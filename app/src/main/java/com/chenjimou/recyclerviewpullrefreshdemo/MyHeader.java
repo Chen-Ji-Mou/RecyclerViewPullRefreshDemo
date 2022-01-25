@@ -9,6 +9,10 @@ import androidx.annotation.Nullable;
 
 public class MyHeader extends FrameLayout
 {
+    int a;
+    int b;
+    //gogogo
+
     public MyHeader(Context context)
     {
         this(context, null);
